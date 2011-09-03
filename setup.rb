@@ -1,9 +1,8 @@
 #!/usr/bin/env ruby
 
-framework 'Foundation'
-
 require 'fileutils'
 require 'optparse'
+require 'open-uri'
 
 include FileUtils
 
@@ -42,13 +41,11 @@ mkdir_p [JENKINS_INSTALL_DIR, JENKINS_HOME_DIR, JENKINS_LOG_DIR]
 
 ### Download and install the .war file
 print('Downloading the latest release of Jenkins')
-jenkins_url = NSURL.alloc.initWithString JENKINS_DOWNLOAD_URL
-jenkins_war = NSMutableData.dataWithContentsOfURL jenkins_url
+jenkins_war = open(JENKINS_DOWNLOAD_URL) {|f| f.read }
 raise 'Failed to download Jenkins' if jenkins_war.nil?
 
 print('Installing Jenkins')
 write_file(JENKINS_WAR_FILE) { |file| file.write String.new(jenkins_war) }
-
 
 ### Launchd setup
 print('Creating launchd plist')
@@ -59,23 +56,22 @@ LAUNCHD_PATH      = File.join(LAUNCHD_DIRECTORY, LAUNCHD_FILE)
 
 arguments = [ '/usr/bin/java', '-jar', JENKINS_WAR_FILE ]
 arguments << "--httpPort=#{options[:port]}" if options.has_key?(:port)
+argstr = arguments.join(" ")
 
-LAUNCHD_SCRIPT    = {
-  'Label'                => LAUNCHD_LABEL,
-  'RunAtLoad'            => true,
-  'EnvironmentVariables' => { 'JENKINS_HOME' => JENKINS_HOME_DIR },
-  'StandardOutPath'      => File.join(JENKINS_LOG_DIR, 'jenkins.log'),
-  'StandardErrorPath'    => File.join(JENKINS_LOG_DIR, 'jenkins-error.log'),
-  'Program'              => '/usr/bin/java',
-  'ProgramArguments'     => arguments
-  # @todo Maybe setup Bonjour using the Socket key
-}
 
 print('Installing launchd plist')
-write_file File.join(JENKINS_INSTALL_DIR, LAUNCHD_FILE) do |file|
-  file.write LAUNCHD_SCRIPT.to_plist
-end
 
+#defaults write launchd_path Label launchd_label
+write_launchd_plist = "defaults write " + File.join(JENKINS_INSTALL_DIR, LAUNCHD_FILE)
+`#{write_launchd_plist} Label #{LAUNCHD_LABEL}`
+`#{write_launchd_plist} RunAtLoad -bool true`
+`#{write_launchd_plist} EnvironmentVariables -dict JENKINS_HOME #{JENKINS_HOME_DIR}`
+`#{write_launchd_plist} StandardOutPath #{JENKINS_LOG_DIR}/jenkins.log`
+`#{write_launchd_plist} StandardErrorPath #{JENKINS_LOG_DIR}/jenkins-error.log`
+`#{write_launchd_plist} Program /usr/bin/java`
+`#{write_launchd_plist} ProgramArguments -array #{argstr}`
+  # @todo Maybe setup Bonjour using the Socket key
+              
 print('Starting launchd job for Jenkins')
 if File::exists?( LAUNCHD_PATH )
   rm LAUNCHD_PATH
