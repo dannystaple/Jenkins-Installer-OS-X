@@ -5,7 +5,9 @@ require 'optparse'
 require 'open-uri'
 
 include FileUtils
-
+#TODO - Add a jenkins user and group, using this home directory
+  # http://osxdaily.com/2007/10/29/how-to-add-a-user-from-the-os-x-command-line-works-with-leopard/
+#TODO - Run (using setuid) Jenkins as user jenkins (and not root) for security
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: setup.rb [options]"
