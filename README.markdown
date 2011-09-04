@@ -1,12 +1,10 @@
 # Jenkins Installer for Mac OS X
 
-NOTE: The official Jenkins installer has become much more mature since
-this project started. The only advantage to using this installer now
-is that it comes with the a control script.
+While the simple war file, or the more complete tomcat setup will do for some, for a Mac user just wanting jenkins running automatically using a control script.
 
 This project aims to create a Mac OS installer package for setting up Jenkins on a Mac.
 
-Right now it is just a simple MacRuby script, but it has most of the features that the installer will have.
+Right now it is just a simple Ruby script, but it has most of the features that the installer will have.
 
 - Jenkins is installed to `/Library/Application Support/Jenkins`
 - The JENKINS\_HOME is set to `/Library/Application Support/Jenkins/working_dir`
