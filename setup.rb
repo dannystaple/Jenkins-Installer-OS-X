@@ -17,6 +17,9 @@ OptionParser.new do |opts|
     puts "Running in fake mode"
     options[:fake] = true
   end
+  opts.on("--plist-only", "Regenerate the plist only, do not download or remake dirs") do
+    options[:plist_only] = true
+  end
 end.parse!
 
 unless ENV['USER'] == 'root' or options[:fake]
@@ -29,7 +32,7 @@ JENKINS_DOWNLOAD_URL = 'http://mirrors.jenkins-ci.org/war/latest/jenkins.war'
 jenkins_install_dir = '/Library/Application Support/Jenkins'
 jenkins_log_dir = '/Library/Logs/Jenkins'
 if options[:fake]
-  jenkins_install_dir  = '/tmp/Jenkins'
+  jenkins_install_dir  = '/tmp/Jenkins Install'
   jenkins_log_dir      = '/tmp/Library/Logs/Jenkins'
 end
 
@@ -39,10 +42,6 @@ JENKINS_HOME_DIR     = File.join( jenkins_install_dir, 'working_dir' )
 def write_file filename, &block
   File.open( filename, 'w', &block )
 end
-
-### Setup directories
-puts('Creating data and logging directories')
-mkdir_p [jenkins_install_dir, JENKINS_HOME_DIR, jenkins_log_dir]
 
 def download_war_file
   ### Download and install the .war file
@@ -54,8 +53,18 @@ def download_war_file
   write_file(JENKINS_WAR_FILE) { |file| file.write String.new(jenkins_war) }
 end
 
-unless options[:fake] 
-  download_war_file
+def install_files
+  ### Setup directories
+  puts('Creating data and logging directories')
+  mkdir_p [jenkins_install_dir, JENKINS_HOME_DIR, jenkins_log_dir]
+
+  unless options[:fake] 
+    download_war_file
+  end
+end
+
+unless options[:plist_only]
+  install_files
 end
 
 ### Launchd setup
@@ -63,9 +72,9 @@ puts('Creating launchd plist')
 LAUNCHD_LABEL     = 'org.jenkins-ci.jenkins'
 LAUNCHD_DIRECTORY = '/Library/LaunchDaemons'
 LAUNCHD_FILE      = "#{LAUNCHD_LABEL}"
-LAUNCHD_PATH      = File.join(LAUNCHD_DIRECTORY, LAUNCHD_FILE)
+LAUNCHD_PATH      = File.join(LAUNCHD_DIRECTORY, LAUNCHD_FILE) + ".plist"
 
-arguments = [ '/usr/bin/java', '-jar', JENKINS_WAR_FILE ]
+arguments = [ '/usr/bin/java', '-jar', "\"" + JENKINS_WAR_FILE + "\"" ]
 arguments << "--httpPort=#{options[:port]}" if options.has_key?(:port)
 argstr = arguments.join(" ")
 
@@ -73,10 +82,10 @@ argstr = arguments.join(" ")
 puts('Installing launchd plist')
 
 #defaults write launchd_path Label launchd_label
-write_launchd_plist = "defaults write " + File.join(jenkins_install_dir, LAUNCHD_FILE)
+write_launchd_plist = "defaults write \"" + File.join(jenkins_install_dir, LAUNCHD_FILE) + "\""
 `#{write_launchd_plist} Label '#{LAUNCHD_LABEL}'`
 `#{write_launchd_plist} RunAtLoad -bool 'true'`
-`#{write_launchd_plist} EnvironmentVariables -dict JENKINS_HOME #{JENKINS_HOME_DIR}`
+`#{write_launchd_plist} EnvironmentVariables -dict JENKINS_HOME '#{JENKINS_HOME_DIR}'`
 `#{write_launchd_plist} StandardOutPath '#{jenkins_log_dir}/jenkins.log'`
 `#{write_launchd_plist} StandardErrorPath '#{jenkins_log_dir}/jenkins-error.log'`
 `#{write_launchd_plist} Program '/usr/bin/java'`
@@ -89,11 +98,12 @@ end
               
 puts('Starting launchd job for Jenkins')
 if File::exists?( LAUNCHD_PATH )
+  `launchctl unload #{LAUNCHD_PATH}`
   rm LAUNCHD_PATH
 end
 ln_s File.join(jenkins_install_dir, LAUNCHD_FILE) + ".plist", LAUNCHD_PATH
 
-`sudo launchctl load  #{LAUNCHD_PATH}`
-`sudo launchctl start #{LAUNCHD_LABEL}`
+`launchctl load  #{LAUNCHD_PATH}`
+`launchctl start #{LAUNCHD_LABEL}`
 
 puts('Jenkins install complete.')
